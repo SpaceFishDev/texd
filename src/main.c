@@ -107,14 +107,14 @@ void write_to_buffer(buffer_t *buffer, char *text)
         buffer->length = strlen(text);
         return;
     }
-    char *new_text = malloc(buffer->length + strlen(text));
-    memset(new_text, 0, buffer->length + strlen(text)); // just in case
+    char *new_text = malloc(buffer->length + strlen(text) + 1);
+    memset(new_text, 0, buffer->length + strlen(text) + 1); // just in case
     memcpy(new_text, buffer->text, buffer->length);
     free(buffer->text);
     buffer->text = new_text;
     char *end_of_old_text = new_text + buffer->length;
     memcpy(end_of_old_text, text, strlen(text));
-    buffer->length = buffer->length + strlen(text);
+    buffer->length += strlen(text);
 }
 
 char *null_terminate_string(char *string, size_t bytes)
@@ -203,12 +203,30 @@ void draw_cursor()
 {
     size_t y = cursor.row * 30;
     y += 28;
-    size_t x = 30;
-    DrawLine(x + ((cursor.column - 1) * (20 + (20 / 3))), y, x + ((cursor.column - 1) * (20 + (20 / 3))), y + 20, BLACK);
+    size_t x = 40;
+    DrawLine(x + ((cursor.column - 1) * 15) + (20 / 3), y, x + ((cursor.column - 1) * 15) + (20 / 3), y + 20, BLACK);
 }
 
-void handle_keyboard()
+void write_char_at_cursor(buffer_t buffer, char key)
 {
+    char *string = buffer.text;
+    char *substring_a = null_terminate_string(buffer.text, cursor.column);
+    char *substring_b = null_terminate_string(buffer.text + cursor.column, buffer.length - cursor.column);
+    char *Buff = malloc(1024 * 1024 * 8);
+    ++buffer.length;
+    memset(Buff, 0, 1024 * 1024 * 8);
+    sprintf(Buff, "%s %c %s", substring_a, key, substring_b);
+    free(buffer.text);
+    buffer.text = 0;
+    buffer.length = 0;
+    write_to_buffer(&buffer, Buff);
+    buffer.length = strlen(Buff);
+    printf(Buff);
+}
+
+void handle_keyboard(buffer_t buffer)
+{
+    msleep(60);
     if (IsKeyDown(KEY_LEFT_SHIFT) && !shift)
     {
         shift = true;
@@ -225,7 +243,19 @@ void handle_keyboard()
     {
         cntrl = false;
     }
+    if (IsKeyDown(KEY_LEFT_ALT) && !alt)
+    {
+        alt = true;
+    }
+    if (IsKeyUp(KEY_LEFT_ALT) && alt)
+    {
+        alt = false;
+    }
     int key = GetKeyPressed();
+    if (IsKeyDown(KEY_ENTER))
+    {
+        key = '\n';
+    }
     for (int i = 0; i != 512; ++i)
     {
         if (keyboard[i])
@@ -277,7 +307,16 @@ void handle_keyboard()
             key = GetKeyPressed();
             continue;
         }
-        printf("%c\n", key);
+        if (key == KEY_LEFT_ALT && alt)
+        {
+            key = GetKeyPressed();
+            continue;
+        }
+        if (key != KEY_LEFT && key != KEY_RIGHT && key != KEY_UP && key != KEY_DOWN)
+        {
+            write_char_at_cursor(buffer, key);
+        }
+        // printf("%c\n", key);
         keyboard[key] = true;
         key = GetKeyPressed();
     }
@@ -355,7 +394,7 @@ reload:
         {
             draw_buffer(buffer);
             draw_cursor();
-            handle_keyboard();
+            handle_keyboard(buffer);
         }
         free(string);
         EndDrawing();
